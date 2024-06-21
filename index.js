@@ -427,7 +427,7 @@ let fetchTorrent = async (query, type = "series") => {
   }/api/v2.0/indexers/torrentproject2/results/torznab/api?apikey=${
     hostdata.apiKey
   }&${type == "movie" ? "t=movie" : "t=tvsearch"}&${
-    type == "movie" ? "cat=8000" : "cat=8000"
+    type == "movie" ? "cat=7000" : "cat=7000"
   }&q=${query}&cache=false`;
 
   //console.log({ url });
