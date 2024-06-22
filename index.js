@@ -427,7 +427,7 @@ let fetchTorrent = async (query, type = "series") => {
   }/api/v2.0/indexers/torrentproject2/results/torznab/api?apikey=${
     hostdata.apiKey
   }&${type == "movie" ? "t=movie" : "t=tvsearch"}&${
-    type == "movie" ? "cat=7000" : "cat=7000"
+    type == "movie" ? "cat=8000" : "cat=8000"
   }&q=${query}&cache=false`;
 
   //console.log({ url });
@@ -564,7 +564,7 @@ app
       version: "1.0.3",
       name: "Torrentproject2",
       description: "Movie & TV Streams from Torrentproject2",
-      logo: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTjF-U45-kc5yetCZx8Brhf6jCG9CSer2oqLBE-Jw-QxQ&s",
+      logo: "https://upload.wikimedia.org/wikipedia/commons/f/f7/Torrentprojectlogo.png",
       resources: [
         {
           name: "stream",
