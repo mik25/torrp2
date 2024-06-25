@@ -1,15 +1,9 @@
-const path = require("path");
-const serversFilePath = path.resolve(__dirname, "./servers.txt");
-
-const fs = require("fs");
 require("dotenv").config();
 const parseTorrent = require("parse-torrent");
 const express = require("express");
 const app = express();
 const fetch = require("node-fetch");
 // var WebTorrent = require("webtorrent");
-const { XMLParser, XMLBuilder, XMLValidator } = require("fast-xml-parser");
-
 var torrentStream = require("torrent-stream");
 const {
   addTorrentFileinRD,
@@ -17,13 +11,7 @@ const {
   selectFilefromRD,
   unrestrictLinkfromRD,
   removeDuplicate,
-  checkTorrentFileinRD,
 } = require("./helper");
-
-const UTILS = require("./utils");
-
-let caches = {};
-let lastCached = null;
 
 const REGEX = {
   season_range:
@@ -44,8 +32,6 @@ function getSize(size) {
       : `${(size / mb).toFixed(2)} MB`)
   );
 }
-
-let nbreAdded = 0;
 
 function getQuality(name) {
   if (!name) {
@@ -90,9 +76,8 @@ const toStream = async (
   const infoHash = parsed.infoHash.toLowerCase();
   let title = tor.extraTag || parsed.name;
   let index = -1;
-  
+
   if (!parsed.files && uri.startsWith("magnet:?")) {
-    
     var engine = torrentStream("magnet:" + uri, { connections: 20 });
     try {
       let res = await new Promise((resolve, reject) => {
@@ -101,7 +86,7 @@ const toStream = async (
         });
         setTimeout(() => {
           resolve([]);
-        }, 20000); //
+        }, 18000); //
       });
       parsed.files = res;
     } catch (error) {
@@ -110,13 +95,9 @@ const toStream = async (
     }
     engine ? engine.destroy() : null;
   }
-  
-  //console.log("--------------------------------------------&");
-  //console.log(parsed?.files ?? []);
-  //console.log("--------------------------------------------$");
 
   if (media == "series") {
-    index = (parsed?.files ?? []).findIndex((element, index) => {
+    index = (parsed.files ?? []).findIndex((element, index) => {
       if (!element["name"]) {
         return false;
       }
@@ -131,61 +112,139 @@ const toStream = async (
         return false;
       }
 
+      let containEandS = (element) =>
+        //SxxExx
+        //SxExx
+        //SxExx
+        //axb
+        //Sxx - Exx
+        //Sxx.Exx
+        //Season xx Exx
+        //SasEae selon abs
+        //SasEaex  selon abs
+        //SasEaexx  selon abs
+        element["name"]
+          ?.toLowerCase()
+          ?.includes(`s${s?.padStart(2, "0")}e${e?.padStart(2, "0")}`) ||
+        element["name"]
+          ?.toLowerCase()
+          ?.includes(`s${s}e${e?.padStart(2, "0")}`) ||
+        element["name"]
+          ?.toLowerCase()
+          ?.includes(`s${s?.padStart(2, "0")}e${e}`) ||
+        element["name"]?.toLowerCase()?.includes(`${s}x${e}`) ||
+        element["name"]
+          ?.toLowerCase()
+          ?.includes(`s${s?.padStart(2, "0")} - e${e?.padStart(2, "0")}`) ||
+        element["name"]
+          ?.toLowerCase()
+          ?.includes(`s${s?.padStart(2, "0")}.e${e?.padStart(2, "0")}`) ||
+        element["name"]
+          ?.toLowerCase()
+          ?.includes(`s${s}${e?.padStart(2, "0")}`) ||
+        // element["name"]?.toLowerCase()?.includes(`s${s}e${e}`) ||
+        element["name"]
+          ?.toLowerCase()
+          ?.includes(`s${s?.padStart(2, "0")}e${e}`) ||
+        element["name"]?.toLowerCase()?.includes(`season ${s} e${e}`) ||
+        (abs &&
+          (element["name"]
+            ?.toLowerCase()
+            ?.includes(
+              `s${abs_season?.padStart(2, "0")}e${abs_episode?.padStart(
+                2,
+                "0"
+              )}`
+            ) ||
+            element["name"]
+              ?.toLowerCase()
+              ?.includes(
+                `s${abs_season?.padStart(2, "0")}e${abs_episode?.padStart(
+                  3,
+                  "0"
+                )}`
+              ) ||
+            element["name"]
+              ?.toLowerCase()
+              ?.includes(
+                `s${abs_season?.padStart(2, "0")}e${abs_episode?.padStart(
+                  4,
+                  "0"
+                )}`
+              )));
+
+      let containE_S = (element) =>
+        //Sxx - xx
+        //Sx - xx
+        //Sx - x
+        //Season x - x
+        //Season x - xx
+        element["name"]
+          ?.toLowerCase()
+          ?.includes(`s${s?.padStart(2, "0")} - ${e?.padStart(2, "0")}`) ||
+        element["name"]
+          ?.toLowerCase()
+          ?.includes(`s${s} - ${e?.padStart(2, "0")}`) ||
+        // element["name"]?.toLowerCase()?.includes(`s${s} - ${e}`) ||
+        // element["name"]?.toLowerCase()?.includes(`season ${s} - ${e}`) ||
+        element["name"]
+          ?.toLowerCase()
+          ?.includes(`season ${s} - ${e?.padStart(2, "0")}`) ||
+        element["name"]
+          ?.toLowerCase()
+          ?.includes(`season ${s} - ${e?.padStart(2, "0")}`);
+
+      let containsAbsoluteE = (element) =>
+        //- xx
+        //- xxx
+        //- xxxx
+        //- 0x
+        element["name"]
+          ?.toLowerCase()
+          ?.includes(` ${abs_episode?.padStart(2, "0")} `) ||
+        element["name"]
+          ?.toLowerCase()
+          ?.includes(` ${abs_episode?.padStart(3, "0")} `) ||
+        element["name"]?.toLowerCase()?.includes(` 0${abs_episode} `) ||
+        element["name"]
+          ?.toLowerCase()
+          ?.includes(` ${abs_episode?.padStart(4, "0")} `);
+
+      let containsAbsoluteE_ = (element) =>
+        // xx.
+        // xxx.
+        // xxxx.
+        // 0x.
+        element["name"]
+          ?.toLowerCase()
+          ?.includes(` ${abs_episode?.padStart(2, "0")}.`) ||
+        element["name"]
+          ?.toLowerCase()
+          ?.includes(` ${abs_episode?.padStart(3, "0")}.`) ||
+        element["name"]?.toLowerCase()?.includes(` 0${abs_episode}.`) ||
+        element["name"]
+          ?.toLowerCase()
+          ?.includes(` ${abs_episode?.padStart(4, "0")}.`);
+
       return (
         isVideo(element) &&
-        (UTILS.containEandS(name, s, e, abs, abs_season, abs_episode) ||
-          UTILS.containE_S(name, s, e, abs, abs_season, abs_episode) ||
-          (s==1 &&  (UTILS.containsAbsoluteE(
-              name,
-              s,
-              e,
-              true,
-              s,
-              e
-            ) ||UTILS.containsAbsoluteE_(
-                name,
-                s,
-                e,
-                true,
-                s,
-                e
-              ))) ||
-            
-          (((abs &&
-            UTILS.containsAbsoluteE(
-              name,
-              s,
-              e,
-              abs,
-              abs_season,
-              abs_episode
-            )) ||
-            (abs &&
-              UTILS.containsAbsoluteE_(
-                name,
-                s,
-                e,
-                abs,
-                abs_season,
-                abs_episode
-              ))) &&
+        (containEandS(element) ||
+          containE_S(element) ||
+          (((abs && containsAbsoluteE(element)) ||
+            (abs && containsAbsoluteE_(element))) &&
             !(
-              name?.includes("s0") ||
-              name?.includes(`s${abs_season}`) ||
-              name?.includes("e0") ||
-              name?.includes(`e${abs_episode}`) ||
-              name?.includes("season")
+              element["name"]?.toLowerCase()?.includes("s0") ||
+              element["name"]?.toLowerCase()?.includes(`s${abs_season}`) ||
+              element["name"]?.toLowerCase()?.includes("e0") ||
+              element["name"]?.toLowerCase()?.includes(`e${abs_episode}`) ||
+              element["name"]?.toLowerCase()?.includes("season")
             )))
       );
     });
     //
-    //console.log({index})
-
     if (index == -1) {
       return null;
     }
-    
-    console.log({ Name: parsed?.files[index]["name"] });
 
     title = !!title ? title + "\n" + parsed.files[index]["name"] : null;
   }
@@ -209,29 +268,7 @@ const toStream = async (
   let folderId = null;
 
   let details = [];
-
-  let available = await checkTorrentFileinRD(infoHash);
-  // console.log({ available });
-  let availableCheck =
-    !!available && infoHash in available
-      ? "rd" in available[infoHash]
-        ? Array.isArray(available[infoHash]["rd"]) &&
-          available[infoHash]["rd"].length > 0
-        : false
-      : false;
-
-  let data = {};
-
-  if (availableCheck || nbreAdded < 3) {
-    if (availableCheck) console.log("Cached");
-    data = await addTorrentFileinRD(parseTorrent.toMagnetURI(parsed));
-    //console.log({data})
-    if (!availableCheck) {
-      nbreAdded++;
-      console.log("Added")
-    }
-  }
-
+  let data = await addTorrentFileinRD(parseTorrent.toMagnetURI(parsed));
   folderId = "id" in data ? data["id"] : null;
   let added = await selectFilefromRD(folderId);
   if (folderId) {
@@ -252,7 +289,7 @@ const toStream = async (
     details = [await unrestrictLinkfromRD(links[selectedIndex] ?? null)];
   }
 
-  //=============================================================================
+  // ===========================================================
 
   title = title ?? parsed.files[index]["name"];
 
@@ -282,7 +319,7 @@ const toStream = async (
   return null;
 };
 
-//====================================================================================
+//------------------------------------------------------------------------------------------
 
 let isRedirect = async (url) => {
   try {
@@ -340,7 +377,7 @@ const streamFromMagnet = (
     realUrl = realUrl ?? null;
 
     if (realUrl) {
-      //console.log({ realUrl });
+      // console.log({ realUrl });
       if (realUrl?.startsWith("magnet:?")) {
         resolve(
           toStream(
@@ -356,7 +393,7 @@ const streamFromMagnet = (
           )
         );
       } else if (realUrl?.startsWith("http")) {
-        parseTorrent.remote(realUrl,{ timeout: 1000 * 10 }, (err, parsed) => {
+        parseTorrent.remote(realUrl, (err, parsed) => {
           if (!err) {
             resolve(
               toStream(
@@ -372,8 +409,7 @@ const streamFromMagnet = (
               )
             );
           } else {
-            //console.log({err})
-            console.log("err parsing http");
+            // console.log("err parsing http");
             resolve(null);
           }
         });
@@ -389,50 +425,50 @@ const streamFromMagnet = (
 };
 
 let torrent_results = [];
-let hosts = [];
 
-const raw_content = require("fs").readFileSync("./servers.txt");
-let content = Buffer.isBuffer(raw_content)
-  ? raw_content.toString()
-  : raw_content;
-hosts = content
-  .split("\n")
-  .map((el) => el.trim())
-  .map((el) => {
-    if (!el.includes("|")) return null;
-    return {
-      host: el.split("|")[0],
-      apiKey: el.split("|").pop(),
-    };
-  });
-
-hosts = hosts.filter((el) => !!el);
+const hosts = [
+  {
+    host: "http://193.32.2.211:9117",
+    apiKey: "kb1z6jk7yo7srkhqohlxe1ack9g0ewtf",
+  },
+  {
+    host: "http://50.121.36.88:9117",
+    apiKey: "jii0bganncd310owructdzgjwkk4a9sn",
+  },
+  {
+    host: "http://23.121.245.187:9117",
+    apiKey: "2b67cqgelfurpy359pnb546gc9jj9i7d",
+  },
+  {
+    host: "http://98.246.174.104:9117",
+    apiKey: "r2q9v8pmrbzyemjk0cfa15opw9sam99f",
+  },
+  {
+    host: "http://81.156.223.238:9117",
+    apiKey: "ozh0zenhc5t9w5hzxkig5uejar4qhdp3",
+  },
+  {
+    host: "http://216.70.20.53:9117",
+    apiKey: "gnzi9k7a6q7fif1rqsxse2by2dhb3lpv",
+  },
+  {
+    host: "http://195.154.176.233:9117",
+    apiKey: "wditbmg7gimijom3ayxdicceshdbl7ou",
+  },
+];
 
 let fetchTorrent = async (query, type = "series") => {
   let hostdata = hosts[Math.floor(Math.random() * hosts.length)];
-  if (!hostdata) return [];
 
-  // let url = `${hostdata.host}/api/v2.0/indexers/all/results?apikey=${
-  //   hostdata.apiKey
-  // }&Query=${query}${
-  //   type == "series"
-  //     ? "&Category%5B%5D=5000"
-  //     : type == "movie"
-  //     ? "&Category%5B%5D=2000"
-  //     : ""
-  // }&Category%5B%5D=8000&Tracker%5B%5D=mejortorrent&cache=false`;
-
-  let url = `${
-    hostdata.host
-  }/api/v2.0/indexers/torrentproject2/results/torznab/api?apikey=${
+  let url = `${hostdata.host}/api/v2.0/indexers/all/results?apikey=${
     hostdata.apiKey
-  }&${type == "movie" ? "t=movie" : "t=tvsearch"}&${
-    type == "movie" ? "cat=8000" : "cat=8000"
-  }&q=${query}&cache=false`;
-
-  //console.log({ url });
-
-  // return [];
+  }&Query=${query}${
+    type == "series"
+      ? "&Category%5B%5D=8000"
+      : type == "movie"
+      ? "&Category%5B%5D=8000"
+      : ""
+  }&Category%5B%5D=127246&Tracker%5B%5D=torrentproject2&cache=false`;
 
   return await fetch(url, {
     headers: {
@@ -447,47 +483,29 @@ let fetchTorrent = async (query, type = "series") => {
   })
     .then(async (res) => {
       try {
-        // return await res.json();
-        const parser = new XMLParser({ ignoreAttributes: false });
-        let jObj = parser.parse(await res.text());
-
-        return "rss" in jObj &&
-          "channel" in jObj["rss"] &&
-          "item" in jObj["rss"]["channel"]
-          ? jObj["rss"]["channel"]["item"]
-          : [];
+        return await res.json();
       } catch (error) {
         console.log({ error });
-        return [];
+        return {};
       }
     })
     .then(async (results) => {
-      results = Array.from(results);
-      console.log({ Initial: results?.length });
-      if (results.length != 0) {
-        // return [];
+      console.log({ Initial: results["Results"]?.length });
+      // console.log({ Response: results["Results"] });
+      if (results["Results"].length != 0) {
         torrent_results = await Promise.all(
-          results.map((result) => {
-            let torznab_attr = {};
-            result["torznab:attr"]?.length
-              ? result["torznab:attr"]?.forEach((el) => {
-                  torznab_attr[el["@_name"]] = el["@_value"];
-                })
-              : false;
+          results["Results"].map((result) => {
             return new Promise((resolve, reject) => {
               resolve({
-                Tracker:
-                  "#text" in result["jackettindexer"]
-                    ? result["jackettindexer"]["#text"]
-                    : "Torrent",
-                Title: result["title"],
-                Seeders: torznab_attr ? torznab_attr["seeders"] : "",
-                Peers: torznab_attr ? torznab_attr["peers"] : "",
-                Link: result["link"],
-                MagnetUri:
-                  "@_url" in result["enclosure"]
-                    ? result["enclosure"]["@_url"]
-                    : null,
+                Tracker: result["Tracker"],
+                Category: result["CategoryDesc"],
+                Title: result["Title"],
+                Seeders: result["Seeders"],
+                Peers: result["Peers"],
+                Link: result["Link"],
+                MagnetUri: result["MagnetUri"],
+                DownloadVolumeFactor: result["DownloadVolumeFactor"],
+                UploadVolumeFactor: result["UploadVolumeFactor"],
               });
             });
           })
@@ -560,11 +578,11 @@ app
 
     //
     var json = {
-      id: "hy.jacketttp2.stream",
+      id: "hyy.jacketttp.stream",
       version: "1.0.3",
       name: "Torrentproject2",
       description: "Movie & TV Streams from Torrentproject2",
-      logo: "https://upload.wikimedia.org/wikipedia/commons/f/f7/Torrentprojectlogo.png",
+      logo: "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcTjF-U45-kc5yetCZx8Brhf6jCG9CSer2oqLBE-Jw-QxQ&s",
       resources: [
         {
           name: "stream",
@@ -589,15 +607,6 @@ app
     id = id.replace(".json", "");
 
     let tmp = [];
-
-    if (
-      id in caches &&
-      caches[id]?.length &&
-      Date.now() < lastCached + 24 * 60 * 60 * 1000
-    ) {
-      console.log(`Returning results from cache: ${caches[id]?.length} found`);
-      return res.send({ streams: caches[id] });
-    }
 
     if (id.includes("kitsu")) {
       tmp = await getImdbFromKitsu(id);
@@ -630,11 +639,9 @@ app
         fetchTorrent(
           encodeURIComponent(`${query} S${(s ?? "1").padStart(2, "0")}`)
         ),
-        fetchTorrent(encodeURIComponent(`${query} Complet`)),
-        // fetchTorrent(
-        //   encodeURIComponent(`${query} Saison ${(s ?? "1").padStart(2, "0")}`)
-        // ),
-        fetchTorrent(encodeURIComponent(`${query} Integrale`)),
+        fetchTorrent(encodeURIComponent(`${query}`)),
+        fetchTorrent(encodeURIComponent(`${query} S${s ?? "1"}`)),
+        // fetchTorrent(encodeURIComponent(`${query} Saison ${s ?? "1"}`)),
         fetchTorrent(
           encodeURIComponent(
             `${query} S${s?.padStart(2, "0")}E${e?.padStart(2, "0")}`
@@ -646,13 +653,12 @@ app
         promises.push(
           fetchTorrent(encodeURIComponent(`${query} ${e?.padStart(2, "0")}`))
         );
-        // promises.push(fetchTorrent(encodeURIComponent(`${query}`)));
       }
 
       if (abs) {
         promises.push(
           fetchTorrent(
-            encodeURIComponent(`${query} E${abs_episode?.padStart(3, "0")}`)
+            encodeURIComponent(`${query} ${abs_episode?.padStart(3, "0")}`)
           )
         );
       }
@@ -735,29 +741,25 @@ app
       result.map((torrent) => {
         if (
           (torrent["MagnetUri"] != "" || torrent["Link"] != "") &&
-          torrent["Peers"] >= 1
+          torrent["Peers"] >= 0
+          // &&
+          // (torrent["DownloadVolumeFactor"] == 0 ||
+          //   (torrent["UploadVolumeFactor"] == 1 &&
+          //     torrent["DownloadVolumeFactor"] == 0))
         ) {
-          console.log(`${torrent["Title"]} ==> ${torrent["Peers"]}`);
           return streamFromMagnet(
             torrent,
             torrent["MagnetUri"] || torrent["Link"],
             media,
             s,
             e,
-            abs_season,
-            abs_episode,
-            abs
+            abs_season
           );
         }
       })
     );
 
     stream_results = Array.from(new Set(stream_results)).filter((e) => !!e);
-
-    if (stream_results.length) {
-      caches[id] = stream_results;
-      lastCached = Date.now();
-    }
 
     console.log({ Final: stream_results.length });
 
